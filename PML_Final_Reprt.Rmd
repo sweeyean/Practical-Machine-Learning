@@ -1,0 +1,113 @@
+---
+title: "PML Final Project"
+author: "Swee Yean"
+date: "August 27, 2016"
+output: pdf_document
+---
+#Background and Introduction
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+Data
+-----------
+The training data for this project are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. 
+
+###Libraries
+```{r, message=F, warning=F}
+library(Hmisc)
+library(caret)
+library(randomForest)
+library(foreach)
+library(doParallel)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+set.seed(12345)
+```
+
+###Getting the data
+The training data set can be found on the following URL:
+```{r}
+trainUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+```
+The testing data set can be found on the following URL:
+```{r}
+testUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+```
+###Cleaning Data
+Firstly, all blank('""'), '#DIV/0' and 'NA' values are converted to 'NA'. Any Columns containing 'NA' are removed from both downloaded data sets.
+```{r}
+training.df <- read.csv(url(trainUrl), na.strings=c("NA","#DIV/0!",""))
+testcases.df <- read.csv(url(testUrl), na.strings=c("NA","#DIV/0!",""))
+training.df<-training.df[,colSums(is.na(training.df)) == 0]
+testcases.df <-testcases.df[,colSums(is.na(testcases.df)) == 0]
+```
+
+The features user_name, raw_timestamp_part_1, raw_timestamp_part_2, cvtd_timestamp ,new_window, num_window, are not related to calculations and are removed form the downloaded data.
+```{r}
+training.df   <-training.df[,-c(1:7)]
+testcases.df <-testcases.df[,-c(1:7)]
+```
+Partioning the training set into two
+Partioning Training data set into two data sets, 60% for myTraining, 40% for myTesting:
+```{r}
+inTrain <- createDataPartition(y=training.df$classe, p=0.6, list=FALSE)
+myTraining <- training.df[inTrain, ]; myTesting <- training.df[-inTrain, ]
+dim(myTraining); dim(myTesting)
+```
+
+####Using ML algorithms for prediction: Decision Tree
+```{r}
+modFitA1 <- rpart(classe ~ ., data=myTesting, method="class")
+```
+Note: to view the decision tree with fancy run this command:
+```{r}
+fancyRpartPlot(modFitA1)
+```
+
+Predicting:
+```{r}
+predictionsA1 <- predict(modFitA1, myTesting, type = "class")
+```
+(Moment of truth) Using confusion Matrix to test results:
+```{r}
+confusionMatrix(predictionsA1, myTesting$classe)
+```
+###Using ML algorithms for prediction: Random Forests
+```{r}
+modFitB1 <- randomForest(classe ~. , data=myTesting)
+```
+Predicting in-sample error:
+```{r}
+predictionsB1 <- predict(modFitB1, myTesting, type = "class")
+```
+(Moment of truth) Using confusion Matrix to test results:
+```{r}
+confusionMatrix(predictionsB1, myTesting$classe)
+```
+###Generating Files to submit as answers for the Assignment:
+Finally, using the provided Test Set out-of-sample error.
+
+For Random Forests we use the following formula, which yielded a much better prediction in in-sample:
+```{r}
+predictionsB2 <- predict(modFitB1, testcases.df, type = "class")
+```
+Function to generate files with predictions to submit for assignment
+```{r}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(predictionsB2)
+```
+
